@@ -1,4 +1,4 @@
-var textarea = document.getElementById('allowed_domains'),
+var textarea = document.getElementById('allowed_urls'),
     update = document.getElementById('update'),
     forbid = document.getElementById('forbid'),
     confirm_btn = document.getElementById('confirm'),
@@ -10,24 +10,19 @@ chrome.runtime.getBackgroundPage(function (b) {
   background = b;
   behavior.innerText = background.current_mode;
 
-  var blocked_domains = [];
-  for (var key in background.domain_blocks) blocked_domains.push(key);
-  blocked_domains.sort(function(a, b) {
-    return background.domain_blocks[b] - background.domain_blocks[a];
-  });
-  for (var i = 0; i < blocked_domains.length; i += 1) {
+  for (var i = background.blocked_urls.length - 1; i >= 0; i--) {
     var new_el = document.createElement('div');
-    new_el.innerText = blocked_domains[i] + ': ' + background.domain_blocks[blocked_domains[i]];
+    new_el.innerText = background.blocked_urls[i];
 
     botr.appendChild(new_el);
   }
 });
 
-chrome.storage.local.get('allowed_domains', function(data) {
-  textarea.value = JSON.parse(data['allowed_domains']).join('\n');
+chrome.storage.local.get('allowed_urls', function(data) {
+  textarea.value = data['allowed_urls'];
 });
 textarea.addEventListener('input', function() {
-  chrome.storage.local.set({'allowed_domains': JSON.stringify(textarea.value.split('\n'))});
+  chrome.storage.local.set({'allowed_urls': textarea.value});
 });
 forbid.addEventListener('click', function() {
   if (background)

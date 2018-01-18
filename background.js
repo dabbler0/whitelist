@@ -1,54 +1,54 @@
 // Whitelist in under 100 lines of code.
-var allowed_domains = {};
-var domain_blocks = {};
+var allowed_urls = [];
+var blocked_urls = [];
 var current_mode = 'forbid';
 
-chrome.storage.local.get('allowed_domains', function (data) {
-  var domain_list = JSON.parse(data['allowed_domains']);
-  for (var i = 0; i < domain_list.length; i++) allowed_domains[domain_list[i]] = true;
-});
 
-chrome.storage.onChanged.addListener(function (changes, namespace) {
-  console.log(changes, namespace);
-  if (namespace !== 'local') return;
-  for (var key in changes) {
-    if (key === 'allowed_domains') {
-      allowed_domains = {};
-      var domain_list = JSON.parse(changes[key].newValue);
-      for (var i = 0; i < domain_list.length; i++) {
-        if (domain_list[i].trim().length > 0 && domain_list[i].trim()[0] !== '#') {
-          allowed_domains[domain_list[i]] = true;
-        }
-      }
-    }
-  }
-});
-
-function get_domain(url) {
+function get_domain (url) {
   // This regex matches: {protocol}   {username:password@}?{domain}
   var match = url.match(/^https?:\/\/([^:@\/]*:?[^:@\/]*@)?([a-zA-Z0-9-\.]*)/);
   if (match != null) return match[2];
 }
 
+function get_allowed_urls (config) {
+  config = config.split('\n').map(function(x) {
+    return x.trim();
+  }).filter(function(x) {
+    return x.length > 0 && x[0] != '#';
+  });
+
+  return config.map(function(x) {
+    if (x[0] == '/') {
+      return (function(url) {
+        return url.match(new RegExp('^https?:\/\/' + x.slice(1) + '([\?#].*)?$')) != null;
+      });
+    } else {
+      return (function(url) { return get_domain(url) === x; });
+    }
+  });
+}
+
+chrome.storage.local.get('allowed_urls', function (data) {
+  allowed_urls = get_allowed_urls(data['allowed_urls']);
+});
+
+chrome.storage.onChanged.addListener(function (changes, namespace) {
+  if (namespace === 'local' && (changes['allowed_urls'] != null))
+    allowed_urls = get_allowed_urls(changes['allowed_urls'].newValue);
+});
+
 chrome.webRequest.onBeforeRequest.addListener(
   function (info) {
-    var domain = get_domain(info.url);
-    if (!domain) return {'cancel': false};
+    var is_allowed = (current_mode == 'permit');
+    for (var i = 0; i < allowed_urls.length; i++)
+      is_allowed = is_allowed || allowed_urls[i](info.url);
 
-    var cancel = false;
-    if (current_mode === 'forbid') {
-      cancel = !allowed_domains[domain];
-    } else if (current_mode === 'confirm') {
-      cancel = !(allowed_domains[domain] ||
-          confirm('Sending a request to: ' + info.url));
-    }
+    if (current_mode === 'confirm')
+      is_allowed = is_allowed || confirm('Send a request to: ' + info.url);
 
-    if (cancel) {
-      domain_blocks[domain] = domain_blocks[domain] || 0;
-      domain_blocks[domain] += 1;
-    }
+    if (!is_allowed) blocked_urls.push(info.url)
 
-    return {'cancel': cancel}
+    return {'cancel': !is_allowed}
   },
   {urls: ['http://*/*', 'https://*/*']},
   ['blocking']
