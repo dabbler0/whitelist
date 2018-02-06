@@ -1,11 +1,35 @@
-// Whitelist in under 100 lines of code.
+/*
+ * Whitelist
+ *
+ * A tiny Chrome extension to only let through requests to a given whitelist
+ * of domains/URL regex patterns. The intention is to make this source code as interpretable
+ * and small as possible so that it is reasonable to expect all users of this extension to read
+ * and understand the entire thing. The entire JavaScript for this extension, including comments,
+ * is under 250 lines.
+ *
+ * (It would otherwise be irresonsible of the user to give
+ * an extension so much power over their browsing.)
+ *
+ * After reading this file, read `popup.js`.
+ *
+ * In this file is described:
+ *  1. The main endpoint that blocks requests not on the whitelist
+ *  2. Code for parsing the configuration file and URLs to determine what to let through
+ *  3. Functions for setting and unsetting the "permit" flag that allows user to temporarily allow
+ *     all requests
+ */
+
 var allowed_urls = []; // List of whitelist matching functions for URLs
+var blocked_urls = []; // List of recently blocked URLs
 var current_mode = 'forbid'; // Flag allowing user to temporarily permit all URLs. Can also be "permit"
 
 /*
- * 1. MAIN ENDPOINT. We bind to the onBeforeRequest listener.
+ * 1. MAIN ENDPOINT.
+ * ================
+ *
+ * We bind to the onBeforeRequest listener.
  */
-chrome.webRequest.onBeforeRequest.addListener((info) => {
+chrome.webRequest.onBeforeRequest.addListener(
   (info) => {
     // If we are in "permit" mode, then we allow everything. We also allow anything from
     // the local filesystem.
@@ -13,7 +37,7 @@ chrome.webRequest.onBeforeRequest.addListener((info) => {
 
     // allowed_urls will be an array of functions that return true or false.
     // Other than filesystem urls, we allow only urls from this array.
-    is_allowed = is_allowed || allowed_urls.any((x) => {return x(info.url);});
+    is_allowed = is_allowed || allowed_urls.some((x) => {return x(info.url);});
 
     // If we disallowed a url, record this so that you can see.
     if (!is_allowed) blocked_urls.push(info.url)
@@ -31,7 +55,10 @@ chrome.webRequest.onBeforeRequest.addListener((info) => {
 );
 
 /*
- * 2. PARSING CODE. We need to know how to: (1) extract domains from urls
+ * 2. PARSING CONFIG & URLS
+ * ========================
+ *
+ * We need to know how to: (1) extract domains from urls
  * and (2) parse the configuration file.
  */
 
@@ -75,7 +102,7 @@ function get_allowed_urls (config) {
 }
 
 /*
- * Load and parse configuration file, and watch for changes to the configuration
+ * 2.3 Load and parse configuration file, and watch for changes to the configuration
  * file (loading and parsing whenever it changes).
  */
 
@@ -91,7 +118,10 @@ chrome.storage.onChanged.addListener(function (changes, namespace) {
 });
 
 /*
- * SETTING "PERMIT" MODE. Permit mode is controlled by the "current_mode" flag and
+ * 3. "PERMIT" MODE.
+ * =================
+ *
+ * Permit mode is controlled by the "current_mode" flag and
  * can be set to "permit" at one minute increments. TODO: change the icon to something red
  * when in permit mode as well.
  */
